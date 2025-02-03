@@ -373,3 +373,41 @@
         (ok true)
     )
 )
+
+;; get-amounts
+;; Given the desired amount of token-0 and token-1, the minimum amounts of token-0 and token-1, and current reserves of token-0 and token-1,
+;; returns the amounts of token-0 and token-1 that should be provided to the pool to meet all constraints
+(define-private (get-amounts (amount-0-desired uint) (amount-1-desired uint) (amount-0-min uint) (amount-1-min uint) (balance-0 uint) (balance-1 uint)) 
+    (let
+        (
+            ;; calculate ideal amount of token-1 that should be provided based on the current ratio of reserves if `amount-0-desired` can be fully used
+            (amount-1-given-0 (/ (* amount-0-desired balance-1) balance-0))
+            ;; calculate ideal amount of token-0 that should be provided based on the current ratio of reserves if `amount-1-desired` can be fully used
+            (amount-0-given-1 (/ (* amount-1-desired balance-0) balance-1))
+        )
+
+        (if 
+            ;; if ideal amount-1 is less than the desired amount-1
+            (<= amount-1-given-0 amount-1-desired)
+            (begin 
+                ;; make sure that ideal amount-1 is >= minimum amount-1 otherwise throw an error
+                (asserts! (>= amount-1-given-0 amount-1-min) ERR_INSUFFICIENT_1_AMOUNT)
+                ;; we can add amount-0-desired and ideal amount-1 to the pool successfully
+                (ok { amount-0: amount-0-desired, amount-1: amount-1-given-0 })
+            )
+            ;; else if ideal amount-1 is greater than the desired amount-1, we can only add up to `amount-1-desired` to the pool
+            (begin 
+                ;; make sure that ideal amount-0 is <= desired amount-0 otherwise throw an error
+                (asserts! (<= amount-0-given-1 amount-0-desired) ERR_INSUFFICIENT_0_AMOUNT)
+                ;; make sure that ideal amount-0 is >= minimum amount-0 otherwise throw an error
+                (asserts! (>= amount-0-given-1 amount-0-min) ERR_INSUFFICIENT_0_AMOUNT)
+                ;; we can add ideal amount-0 and amount-1-desired to the pool successfully
+                (ok { amount-0: amount-0-given-1, amount-1: amount-1-desired })
+            )
+        )
+    )
+)
+
+(define-private (min (a uint) (b uint)) 
+    (if (< a b) a b)
+)
