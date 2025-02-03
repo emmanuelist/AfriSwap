@@ -320,3 +320,56 @@
         (ok true)
     )
 )
+
+;; Compute the hash of (token0 + token1 + fee) to use as a pool ID
+(define-read-only (get-pool-id (pool-info {token-0: <ft-trait>, token-1: <ft-trait>, fee: uint})) 
+    (let 
+        (
+            (buff (unwrap-panic (to-consensus-buff? pool-info)))
+            (pool-id (hash160 buff))
+        )
+
+        pool-id
+    )
+)
+
+;; get-pool-data
+;; Given a pool ID, returns the current state of the pool from the mapping
+(define-read-only (get-pool-data (pool-id (buff 20))) 
+    (let 
+        (
+            (pool-data (map-get? pools pool-id))
+        )
+
+        (ok pool-data)
+    )
+)
+
+;; get-position-liquidity
+;; Given a Pool ID and a user address, returns how much liquidity the user has in the pool
+(define-read-only (get-position-liquidity (pool-id (buff 20)) (owner principal))
+    (let
+        (
+            ;; look up the position in the `positions` map
+            (position (map-get? positions { pool-id: pool-id, owner: owner }))
+            ;; if position exists, return the liquidity otherwise return 0
+            (existing-owner-liquidity (if (is-some position) (unwrap-panic position) {liquidity: u0}))
+        )
+
+        (ok (get liquidity existing-owner-liquidity))
+    )
+)
+
+
+;; Ensure that the token-0 principal is "less than" the token-1 principal
+(define-private (correct-token-ordering (token-0 principal) (token-1 principal)) 
+    (let
+        (
+            (token-0-buff (unwrap-panic (to-consensus-buff? token-0)))
+            (token-1-buff (unwrap-panic (to-consensus-buff? token-1)))
+        )
+
+        (asserts! (< token-0-buff token-1-buff) ERR_INCORRECT_TOKEN_ORDERING)
+        (ok true)
+    )
+)
