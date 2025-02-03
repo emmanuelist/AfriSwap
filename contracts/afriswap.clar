@@ -58,3 +58,46 @@
         liquidity: uint
     }
 )
+
+;; create-pool
+;; Creates a new pool with the given token-0, token-1, and fee
+;; Ensures that a pool with these two tokens and given fee amount does not already exist
+(define-public (create-pool (token-0 <ft-trait>) (token-1 <ft-trait>) (fee uint)) 
+    (let (
+        ;; Create a pool-info tuple with the information
+        (pool-info {
+            token-0: token-0,
+            token-1: token-1,
+            fee: fee
+        })
+        ;; Compute the pool ID
+        (pool-id (get-pool-id pool-info))
+        ;; Ensure this Pool ID doesn't already exist in the `pools` map
+        (pool-does-not-exist (is-none (map-get? pools pool-id)))
+
+        ;; Convert the <ft-trait> values into principals
+        (token-0-principal (contract-of token-0))
+        (token-1-principal (contract-of token-1))
+
+        ;; Prepare the pool-data tuple
+        (pool-data {
+            token-0: token-0-principal,
+            token-1: token-1-principal,
+            fee: (get fee pool-info),
+            liquidity: u0, ;; initially, liquidity is 0
+            balance-0: u0, ;; initially, balance-0 (x) is 0
+            balance-1: u0 ;; initially, balance-1 (y) is 0
+        })
+    ) 
+
+    ;; If pool does already exist, throw an error
+    (asserts! pool-does-not-exist ERR_POOL_ALREADY_EXISTS)
+    ;; If the token-0 principal is not "less than" the token-1 principal, throw an error
+    (asserts! (is-ok (correct-token-ordering token-0-principal token-1-principal)) ERR_INCORRECT_TOKEN_ORDERING)
+    
+    ;; Update the `pools` map with the new pool data
+    (map-set pools pool-id pool-data)
+    (print { action: "create-pool", data: pool-data})
+    (ok true)
+    )
+)
