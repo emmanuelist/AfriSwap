@@ -251,3 +251,72 @@
         (ok true)
     )
 )
+
+;; swap
+;; Swaps two tokens in a given pool
+;; Ensure the pool exists, calculate the amount of tokens to give back to the user, handle the case where the user is swapping for token-0 or token-1
+;; Transfer input token from user to pool, transfer output token from pool to user, and update mappings as needed
+(define-public (swap (token-0 <ft-trait>) (token-1 <ft-trait>) (fee uint) (input-amount uint) (zero-for-one bool)) 
+    (let
+        (
+            ;; compute the pool id and fetch the current state of the pool from the mapping
+            (pool-info {
+                token-0: token-0,
+                token-1: token-1,
+                fee: fee
+            })
+            (pool-id (get-pool-id pool-info))
+            (pool-data (unwrap! (map-get? pools pool-id) (err u0)))
+            (sender tx-sender)
+
+            (pool-liquidity (get liquidity pool-data))
+            (balance-0 (get balance-0 pool-data))
+            (balance-1 (get balance-1 pool-data))
+
+            ;; xy = k
+            ;; compute the constant k before the swap
+            (k (* balance-0 balance-1))
+
+            ;; keep track of which token is the input and which is the output
+            ;; based on the value of zero-for-one
+            (input-token (if zero-for-one token-0 token-1))
+            (output-token (if zero-for-one token-1 token-0))
+
+            ;; keep track of the input and output balances
+            (input-balance (if zero-for-one balance-0 balance-1))
+            (output-balance (if zero-for-one balance-1 balance-0))
+
+            ;; compute the output amount by solving xy = k
+            (output-amount (- output-balance (/ k (+ input-balance input-amount))))
+            ;; calculate fees to charge as a % of the output amount
+            (fees (/ (* output-amount fee) FEES_DENOM))
+            ;; subtract the fees from the output amount
+            (output-amount-sub-fees (- output-amount fees))
+
+            ;; compute the new balances of the pool after the swap
+            (balance-0-post-swap (if zero-for-one (+ balance-0 input-amount) (- balance-0 output-amount-sub-fees)))
+            (balance-1-post-swap (if zero-for-one (- balance-1 output-amount-sub-fees) (+ balance-1 input-amount)))
+        )
+
+        ;; make sure user is swapping >0 tokens
+        (asserts! (> input-amount u0) ERR_INSUFFICIENT_INPUT_AMOUNT)
+        ;; make sure user is getting back >0 tokens
+        (asserts! (> output-amount-sub-fees u0) ERR_INSUFFICIENT_LIQUIDITY_FOR_SWAP)
+        ;; make sure we can afford to do this swap (have enough output tokens to give back to user)
+        (asserts! (< output-amount-sub-fees output-balance) ERR_INSUFFICIENT_LIQUIDITY_FOR_SWAP)
+
+        ;; transfer input token from user to pool
+        (try! (contract-call? input-token transfer input-amount sender THIS_CONTRACT none))
+        ;; transfer output token from pool to user
+        (try! (as-contract (contract-call? output-token transfer output-amount-sub-fees THIS_CONTRACT sender none)))
+
+        ;; update pool balances (x and y)
+        (map-set pools pool-id (merge pool-data {
+            balance-0: balance-0-post-swap,
+            balance-1: balance-1-post-swap
+        }))
+
+        (print { action: "swap", pool-id: pool-id, input-amount: input-amount })
+        (ok true)
+    )
+)
