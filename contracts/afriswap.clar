@@ -189,3 +189,65 @@
         (ok true)
     )
 )
+
+;; remove-liquidity
+;; Removes liquidity from a given pool
+;; Ensure the pool exists, ensures the user owns enough liquidity as they want to remove, calculate amount of tokens to give back to them
+;; Transfer tokens from pool to user, and update mappings as needed
+(define-public (remove-liquidity (token-0 <ft-trait>) (token-1 <ft-trait>) (fee uint) (liquidity uint))
+    (let
+        (
+            ;; compute the pool id and fetch the current state of the pool from the mapping
+            (pool-info {
+                token-0: token-0,
+                token-1: token-1,
+                fee: fee
+            })
+            (pool-id (get-pool-id pool-info))
+            (pool-data (unwrap! (map-get? pools pool-id) (err u0)))
+            (sender tx-sender)
+
+            (pool-liquidity (get liquidity pool-data))
+            (balance-0 (get balance-0 pool-data))
+            (balance-1 (get balance-1 pool-data))
+
+            ;; fetch the user's position
+            (user-liquidity (unwrap! (get-position-liquidity pool-id sender) (err u0)))
+
+            ;; calculate how much amount-0 and amount-1 the user should receive as a % of how much they are withdrawing compared to the total pool liquidity
+            (amount-0 (/ (* liquidity balance-0) pool-liquidity))
+            (amount-1 (/ (* liquidity balance-1) pool-liquidity))
+
+        )
+
+        ;; make sure user owns enough liquidity to withdraw
+        (asserts! (>= user-liquidity liquidity) ERR_INSUFFICIENT_LIQUIDITY_OWNED)
+        ;; make sure user is getting at least some amount of tokens back
+        (asserts! (> amount-0 u0) ERR_INSUFFICIENT_LIQUIDITY_BURNED)
+        (asserts! (> amount-1 u0) ERR_INSUFFICIENT_LIQUIDITY_BURNED)
+
+        ;; transfer tokens from pool to user
+        (try! (as-contract (contract-call? token-0 transfer amount-0 THIS_CONTRACT sender none)))
+        (try! (as-contract (contract-call? token-1 transfer amount-1 THIS_CONTRACT sender none)))
+
+        ;; update the `positions` map with the new liquidity of the user (pre existing liquidity - new liquidity)
+        (map-set positions 
+            {
+                pool-id: pool-id,
+                owner: sender
+            }
+            {
+                liquidity: (- user-liquidity liquidity)
+            }
+        )
+
+        ;; update the `pools` map with the new pool liquidity, balance-0, and balance-1
+        (map-set pools pool-id (merge pool-data {
+            liquidity: (- pool-liquidity liquidity),
+            balance-0: (- balance-0 amount-0),
+            balance-1: (- balance-1 amount-1)
+        }))
+        (print { action: "remove-liquidity", pool-id: pool-id, amount-0: amount-0, amount-1: amount-1, liquidity: liquidity })
+        (ok true)
+    )
+)
