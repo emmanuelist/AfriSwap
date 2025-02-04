@@ -152,3 +152,15 @@ describe("afriswap Tests", () => {
     expect(tokenTwoWithdrawn).toBeLessThan(withdrawableTokenTwoPreSwap); // Reduced token1 due to swap
   });
 });
+
+// Helper Functions
+
+/** Create new liquidity pool */
+function createPool() {
+  return simnet.callPublicFn(
+    "afriswap",
+    "create-pool",
+    [mockTokenOne, mockTokenTwo, Cl.uint(500)], // 0.05% fee
+    alice
+  );
+}
