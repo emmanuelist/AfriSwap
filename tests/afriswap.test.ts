@@ -155,12 +155,72 @@ describe("afriswap Tests", () => {
 
 // Helper Functions
 
-/** Create new liquidity pool */
+/** Create new liquidity pool **/
 function createPool() {
   return simnet.callPublicFn(
     "afriswap",
     "create-pool",
     [mockTokenOne, mockTokenTwo, Cl.uint(500)], // 0.05% fee
+    alice
+  );
+}
+
+/** Add liquidity to pool **/
+function addLiquidity(account: string, amount0: number, amount1: number) {
+  return simnet.callPublicFn(
+    "afriswap",
+    "add-liquidity",
+    [
+      mockTokenOne,
+      mockTokenTwo,
+      Cl.uint(500),
+      Cl.uint(amount0),
+      Cl.uint(amount1),
+      Cl.uint(0), // Min liquidity (unused)
+      Cl.uint(0), // Min liquidity (unused)
+    ],
+    account
+  );
+}
+
+/** Remove liquidity from pool **/
+function removeLiquidity(account: string, liquidity: number) {
+  return simnet.callPublicFn(
+    "afriswap",
+    "remove-liquidity",
+    [mockTokenOne, mockTokenTwo, Cl.uint(500), Cl.uint(liquidity)],
+    account
+  );
+}
+
+/** Execute token swap **/
+function swap(account: string, inputAmount: number, zeroForOne: boolean) {
+  return simnet.callPublicFn(
+    "afriswap",
+    "swap",
+    [
+      mockTokenOne,
+      mockTokenTwo,
+      Cl.uint(500),
+      Cl.uint(inputAmount),
+      Cl.bool(zeroForOne), // Swap direction
+    ],
+    account
+  );
+}
+
+/** Get pool ID for verification **/
+function getPoolId() {
+  return simnet.callReadOnlyFn(
+    "afriswap",
+    "get-pool-id",
+    [
+      Cl.tuple({
+        "token-0": mockTokenOne,
+        "token-1": mockTokenTwo,
+        fee: Cl.uint(500),
+      }),
+    ],
     alice
   );
 }
